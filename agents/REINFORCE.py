@@ -60,7 +60,6 @@ class Buffer():
         temp_traj: list where each element is a list that contains: observation, reward, action, state-value
         '''
         # store only if the temp_traj list is not empty
-        # pdb.set_trace()
         if len(temp_traj) > 0:
             self.obs.extend(temp_traj[:,0])
             rtg = discounted_rewards(temp_traj[:,1], self.gamma)
@@ -92,7 +91,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
 
     env = gym.make(env_name)    
 
-    optimizer = tf.compat.v1.train.AdamOptimizer(lr)
+    optimizer = tf.keras.optimizers.Adam(lr)
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n 
 
@@ -108,7 +107,6 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
     hyp_str = '-steps_{}-aclr_{}'.format(steps_per_epoch, lr)
     file_writer = tf.summary.create_file_writer('log_dir/{}/REINFORCE_{}_{}'.format(env_name, clock_time, hyp_str))
     
-    #pdb.set_trace() 
     
     # few variables
     step_count = 0
@@ -128,7 +126,6 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
     # epochs_summary = pre_scalar_summary(obs_batch, act_batch, ret_batch)
     # file_writer.add_summary(epochs_summary, step_count)
 
-    # pdb.set_trace()
     # policy
     p_logits = mlp(obs_dim, hidden_sizes, act_dim, activation=tf.tanh)
     # tf.print(p_logits)
@@ -138,6 +135,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
 
         # initialize environment for the new epochs
         obs = env.reset()
+        # env.render()
         obs = tf.Variable(obs)
         obs = tf.expand_dims(obs, 0)
         # intiaizlie buffer and other variables for the new epochs
@@ -145,13 +143,12 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
         env_buf = []
         ep_rews = []
         while len(buffer) < steps_per_epoch:
-            #pdb.set_trace()
             # run the policy
             # print(obs)
             act = tf.squeeze(tf.random.categorical(p_logits(obs), 1))
             # take a step in the environment
             obs2, rew, done, _ = env.step(tf.squeeze(act).numpy())
-            # pdb.set_trace()
+            # env.render()
             # add the new transition
             env_buf.append([obs.numpy().squeeze(), rew, act.numpy()])
             # print(1)
@@ -162,7 +159,6 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
 
             if done:
                 # store the trajectory just completed
-                # pdb.set_trace()
                 buffer.store(np.array(env_buf))
                 env_buf = []
                 # store additionl information about the episode
@@ -170,44 +166,29 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
                 train_ep_len.append(len(ep_rews))
                 # reset the environment
                 obs = env.reset()
+                env.render()
                 obs = tf.Variable(obs)
                 obs = tf.expand_dims(obs, 0)
+                # pdb.set_trace()
                 ep_rews = []
 
         # collect the episodes' information
         obs_batch, act_batch, ret_batch = buffer.get_batch()
         
-
-        # tf.summary.scalar('old_p_loss', p_loss, collections=['pre_train'])
-        # pre_scalar_summary = tf.summary.merge_all('pre_train')
-        # run pre_scalar_summary before the optimization phase
-        # epochs_summary = pre_scalar_summary(obs_batch, act_batch, ret_batch)
-        # file_writer.add_summary(epochs_summary, step_count)
-
-
         # policy
-        # p_logits = mlp(obs_batch, hidden_sizes, act_dim, activation=tf.tanh)
-        # tf.print(p_logits)
-        # print(2)
         with tf.GradientTape() as tape:
             actions_mask = tf.one_hot(act_batch, depth=act_dim)
-            p_log = tf.reduce_sum(tf.multiply(actions_mask, tf.nn.log_softmax(p_logits(obs))), axis=1)
-            # p_loss = -tf.reduce_mean(p_log*ret_batch)
-            # tf.summary.scalar('old_p_loss', p_loss, collections=['pre_train'])
-            # pre_scalar_summary = tf.summary.merge_all('pre_train')
-            # entropy useful to study the algorithms
-            entropy = -tf.reduce_mean(softmax_entropy(p_logits(obs)))
+            obs_batch = tf.Variable(obs_batch)
+            # pdb.set_trace()
+            
+            # obs_batch = tf.expand_dims(obs_batch, 0)
+            p_log = tf.reduce_sum(tf.multiply(actions_mask, tf.nn.log_softmax(p_logits(obs_batch))), axis=1)
+
+            entropy = -tf.reduce_mean(softmax_entropy(p_logits(obs_batch)))
             p_loss = -tf.reduce_mean(p_log*ret_batch)
 
-            # pdb.set_trace()
-            # policy optimization
-        var_list_fn = p_logits.trainable_weights
         gradients = tape.gradient(p_loss,  p_logits.trainable_weights)
         optimizer.apply_gradients(zip(gradients, p_logits.trainable_variables))
-        # p_opt = optimizer.minimize(p_loss_fn, var_list=[p_logits.trainable_weights])
-        # Optimize the policy
-        #sess.run(p_opt, feed_dict={obs_ph:obs_batch, act_ph:act_batch, ret_ph:ret_batch})
-
 
 
 
