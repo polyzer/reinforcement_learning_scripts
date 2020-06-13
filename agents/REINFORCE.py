@@ -166,7 +166,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
                 train_ep_len.append(len(ep_rews))
                 # reset the environment
                 obs = env.reset()
-                env.render()
+                # env.render()
                 obs = tf.Variable(obs)
                 obs = tf.expand_dims(obs, 0)
                 # pdb.set_trace()
