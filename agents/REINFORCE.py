@@ -4,8 +4,16 @@ import gym
 from datetime import datetime
 import time
 import pdb
+import logging
+tf.get_logger().setLevel(logging.ERROR)
 
-# tf.enable_eager_execution()
+@tf.function
+def log_summary(writer, step, p_loss, entropy, p_log, ret_batch):
+    with writer.as_default():
+        tf.summary.scalar('p_loss', p_loss, step=step)
+        tf.summary.scalar('entropy', entropy, step=step)
+        tf.summary.histogram('p_log', p_log, step=step)
+        tf.summary.histogram('ret_ph', ret_batch, step=step)
 
 def mlp(x, hidden_layers, output_size, activation=tf.nn.relu, last_activation=None):
     '''
@@ -105,7 +113,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
     print('Time:', clock_time)
 
     hyp_str = '-steps_{}-aclr_{}'.format(steps_per_epoch, lr)
-    file_writer = tf.summary.create_file_writer('log_dir/{}/REINFORCE_{}_{}'.format(env_name, clock_time, hyp_str))
+    writer = tf.summary.create_file_writer('log_dir/{}/REINFORCE_{}_{}'.format(env_name, clock_time, hyp_str))
     
     
     # few variables
@@ -117,14 +125,6 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
     buffer = Buffer(gamma)
     # collect the episodes' information
     obs_batch, act_batch, ret_batch = buffer.get_batch()
-
-    # p_loss = -tf.reduce_mean(p_log*ret_batch)
-    # tf.summary.scalar('old_p_loss', p_loss, collections=['pre_train'])
-    # pre_scalar_summary = tf.summary.merge_all('pre_train')
-
-    # # run pre_scalar_summary before the optimization phase
-    # epochs_summary = pre_scalar_summary(obs_batch, act_batch, ret_batch)
-    # file_writer.add_summary(epochs_summary, step_count)
 
     # policy
     p_logits = mlp(obs_dim, hidden_sizes, act_dim, activation=tf.tanh)
@@ -193,30 +193,14 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
 
 
         # Set scalars and hisograms for TensorBoard
-        # tf.summary.scalar('p_loss', p_loss, collections=['train'])
-        # tf.summary.scalar('entropy', entropy, collections=['train'])
-        # tf.summary.histogram('p_soft', tf.nn.softmax(p_logits), collections=['train'])
-        # tf.summary.histogram('p_log', p_log, collections=['train'])
-        # tf.summary.histogram('act_multn', act_multn, collections=['train'])
-        # tf.summary.histogram('p_logits', p_logits, collections=['train'])
-        # tf.summary.histogram('ret_ph', ret_batch, collections=['train'])
-        # train_summary_run = tf.summary.merge_all('train')
+        log_summary(writer, ep, p_loss, entropy, p_log, ret_batch)
+        writer.flush()
         
-        # tf.summary.scalar('old_p_loss', p_loss, collections=['pre_train'])
-        # pre_scalar_summary = tf.summary.merge_all('pre_train')
-        # run train_summary to save the summary after the optimization
-        # train_summary_run = sess.run(train_summary, feed_dict={obs_ph:obs_batch, act_ph:act_batch, ret_ph:ret_batch})
-        # file_writer.add_summary(train_summary_run, step_count)
 
         # it's time to print some useful information
         if ep % 10 == 0:
             print('Ep:%d MnRew:%.2f MxRew:%.1f EpLen:%.1f Buffer:%d -- Step:%d -- Time:%d' % (ep, np.mean(train_rewards), np.max(train_rewards), np.mean(train_ep_len), len(buffer), step_count,time.time()-timer))
 
-            # summary = tf.Summary()
-            # summary.value.add(tag='supplementary/len', simple_value=np.mean(train_ep_len))
-            # summary.value.add(tag='supplementary/train_rew', simple_value=np.mean(train_rewards))
-            # file_writer.add_summary(summary, step_count)
-            # file_writer.flush()
 
             timer = time.time()
             train_rewards = []
@@ -224,7 +208,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
 
 
     env.close()
-    file_writer.close()
+    writer.close()
 
 
 if __name__ == '__main__':
