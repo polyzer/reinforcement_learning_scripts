@@ -145,6 +145,7 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
         while len(buffer) < steps_per_epoch:
             # run the policy
             # print(obs)
+            pdb.set_trace()
             act = tf.squeeze(tf.random.categorical(p_logits(obs), 1))
             # take a step in the environment
             obs2, rew, done, _ = env.step(tf.squeeze(act).numpy())
@@ -165,9 +166,8 @@ def REINFORCE(env_name, hidden_sizes=[32], lr=5e-3, num_epochs=50, gamma=0.99, s
                 train_rewards.append(np.sum(ep_rews))
                 train_ep_len.append(len(ep_rews))
                 # reset the environment
-                obs = env.reset()
                 # env.render()
-                obs = tf.Variable(obs)
+                obs = tf.Variable(env.reset())
                 obs = tf.expand_dims(obs, 0)
                 # pdb.set_trace()
                 ep_rews = []
