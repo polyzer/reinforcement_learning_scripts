@@ -99,6 +99,9 @@ def AC(env_name, hidden_sizes=[32], ac_lr=5e-3, cr_lr=8e-3, num_epochs=50, gamma
     steps_per_epoch: number of steps per epoch
     '''
 
+    Flags = {
+        "can_render": False
+    }
 
     # Time
     now = datetime.now()
@@ -190,7 +193,8 @@ def AC(env_name, hidden_sizes=[32], ac_lr=5e-3, cr_lr=8e-3, num_epochs=50, gamma
 
             # take a step in the environment
             obs2, rew, done, _ = env.step(tf.squeeze(act).numpy())
-
+            if Flags['can_render']:
+                env.render()
             # add the new transition
             env_buf.append([obs.numpy().squeeze(), rew, act, np.squeeze(val)])
 
@@ -248,7 +252,11 @@ def AC(env_name, hidden_sizes=[32], ac_lr=5e-3, cr_lr=8e-3, num_epochs=50, gamma
 
         # it's time to print some useful information
         if last_print_step > steps_to_print:
-            # print('Ep:%d MnRew:%.2f MxRew:%.1f EpLen:%.1f Buffer:%d -- Step:%d -- Time:%d' % (ep, np.mean(train_rewards), np.max(train_rewards), np.mean(train_ep_len), len(buffer), step_count,time.time()-timer))
+            # if np.mean(train_rewards) > 100:
+            #     Flags["can_render"] = True
+            print(train_rewards)
+            if train_rewards:
+                print('Ep:%d MnRew:%.2f MxRew:%.1f EpLen:%.1f Buffer:%d -- Step:%d -- Time:%d' % (ep, np.mean(train_rewards), np.max(train_rewards), np.mean(train_ep_len), len(buffer), step_count,time.time()-timer))
             # with writer.as_default():
             #     tf.summary.value.add(tag='supplementary/len', simple_value=np.mean(train_ep_len))
             #     tf.summary.value.add(tag='supplementary/train_rew', simple_value=np.mean(train_rewards))
