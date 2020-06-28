@@ -73,6 +73,7 @@ class Buffer():
         if len(temp_traj) > 0:
             self.obs.extend(temp_traj[:,0])
             rtg = discounted_rewards(temp_traj[:,1], last_sv, self.gamma)
+            # pdb.set_trace()
             self.ret.extend(rtg - temp_traj[:,3])
             self.rtg.extend(rtg)
             self.act.extend(temp_traj[:,2])
@@ -111,6 +112,8 @@ def AC(env_name, hidden_sizes=[32], ac_lr=5e-3, cr_lr=8e-3, num_epochs=50, gamma
     hyp_str = '-steps_{}-aclr_{}-crlr_{}'.format(steps_per_epoch, ac_lr, cr_lr)
     writer = tf.summary.create_file_writer('log_dir/{}/AC_{}_{}'.format(env_name, clock_time, hyp_str))
     env = gym.make(env_name)    
+
+    # pdb.set_trace()
 
     p_opt = tf.keras.optimizers.Adam(ac_lr)
     v_opt = tf.keras.optimizers.Adam(cr_lr)
