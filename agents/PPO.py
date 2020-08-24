@@ -8,7 +8,7 @@ import pybullet_envs
 import pdb
 import logging
 tf.get_logger().setLevel(logging.ERROR)
-
+# tf.config.set_visible_devices([], 'GPU')
 
 def mlp(x, hidden_layers, output_size, activation=tf.nn.relu, last_activation=None):
     '''
@@ -19,6 +19,7 @@ def mlp(x, hidden_layers, output_size, activation=tf.nn.relu, last_activation=No
     for l in hidden_layers:
         x = tf.keras.layers.Dense(units=l, activation=activation)(x)
     output = tf.keras.layers.Dense(units=output_size, activation=last_activation)(x)
+    # pdb.set_trace()
     return tf.keras.Model(inputs=inputt, outputs=output)
 
 def softmax_entropy(logits):
@@ -32,7 +33,6 @@ def clipped_surrogate_obj(new_p, old_p, adv, eps):
     Clipped surrogate objective function
     '''
     rt = tf.exp(new_p - old_p) # i.e. pi / old_pi
-    # pdb.set_trace()
     return -tf.reduce_mean(tf.minimum(rt*adv, tf.clip_by_value(rt, 1-eps, 1+eps)*adv))
 
 def GAE(rews, v, v_last, gamma=0.99, lam=0.95):
@@ -40,6 +40,7 @@ def GAE(rews, v, v_last, gamma=0.99, lam=0.95):
     Generalized Advantage Estimation
     '''
     assert len(rews) == len(v)
+
     vs = np.append(v, v_last)
     delta = np.array(rews) + gamma*vs[1:] - vs[:-1]
     gae_advantage = discounted_rewards(delta, 0, gamma*lam)
@@ -55,7 +56,6 @@ def discounted_rewards(rews, last_sv, gamma):
     last_sv: value of the last state
     gamma: discount value 
     '''
-    pdb.set_trace()
     rtg = np.zeros_like(rews, dtype=np.float32)
     rtg[-1] = rews[-1] + gamma*last_sv
     for i in reversed(range(len(rews)-1)):
@@ -78,6 +78,7 @@ class StructEnv(gym.Wrapper):
         self.n_obs = self.env.reset(**kwargs)
         self.rew_episode = 0
         self.len_episode = 0
+        # pdb.set_trace()
         return self.n_obs.copy()
         
     def step(self, action):
@@ -115,12 +116,13 @@ class Buffer():
         '''
         # store only if there are temporary trajectories
         if len(temp_traj) > 0:
-            pdb.set_trace()
+            # pdb.set_trace()
             self.ob.extend(temp_traj[:,0])
             rtg = discounted_rewards(temp_traj[:,1], last_sv, self.gamma)
             self.adv.extend(GAE(temp_traj[:,1], temp_traj[:,3], last_sv, self.gamma, self.lam))
             self.rtg.extend(rtg)
             self.ac.extend(temp_traj[:,2])
+
 
     def get_batch(self):
         # standardize the advantage values
@@ -167,17 +169,21 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         return tf.squeeze(tf.random.multinomial(p_logits, 1))
 
     def act_smp_cont(p_noisy, low_action_space, high_action_space):
-        return tf.clip_by_value(p_noisy, low_action_space, high_action_space)
+        ret = tf.clip_by_value(p_noisy, low_action_space, high_action_space)
+        # pdb.set_trace()
+        return ret
 
     def get_p_noisy(p_logits, log_std):
-        return p_logits + tf.random.normal(tf.shape(p_logits), 0, 1) * tf.exp(log_std)
+        ret = p_logits + tf.random.normal(tf.shape(p_logits), 0, 1) * tf.exp(log_std)
+        return ret
 
     def get_p_log_discrete(p_logits, act_ph, act_dim, log_std):
         act_onehot = tf.one_hot(act_ph, depth=act_dim)
         return tf.reduce_sum(act_onehot * tf.nn.log_softmax(p_logits), axis=-1)
 
     def get_p_log_cont(x, mean, log_std):
-        return gaussian_log_likelihood(x, mean, log_std)
+        ret = gaussian_log_likelihood(x, mean, log_std)
+        return ret
 
     # Create some environments to collect the trajectories
     envs = [StructEnv(gym.make(env_name)) for _ in range(number_envs)]
@@ -197,7 +203,6 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
     # Computational graph for the policy in case of a continuous action space
     if action_type == 'Discrete':
         p_logits = mlp(obs_dim, hidden_sizes, act_dim, tf.nn.relu, last_activation=tf.tanh)
-        print('OKKJHKDFJHSFKHGSDFIUGSDF')
         act_smp = act_smp_discrete
         p_log = get_p_log_discrete
         
@@ -273,20 +278,23 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
             temp_buf = []
 
             #iterate over a fixed number of steps
-            for _ in range(steps_per_env):
-                # pdb.set_trace()
+            for k in range(steps_per_env):
+                # print(k)
                 # run the policy
                 nobs = tf.Variable([env.n_obs])
                 nobs = tf.expand_dims(nobs, 0)
+                if type(nobs) != tf.python.framework.ops.EagerTensor:
+                    pdb.set_trace()
                 p_logits_val = p_logits(nobs)
                 p_noisy_val = p_noisy(p_logits_val, log_std)
                 act = act_smp(p_noisy_val, low_action_space, high_action_space)
                 val = s_values(nobs)
                 act = np.squeeze(act)
-
+                
+                # pdb.set_trace()
                 # take a step in the environment
                 obs2, rew, done, _ = env.step(act)
-                
+                # pdb.set_trace()
                 # add the new transition to the temporary buffer
                 temp_buf.append([env.n_obs.copy(), rew, act, np.squeeze(val)])
 
@@ -318,7 +326,6 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         # Gather the entire batch from the buffer
         # NB: all the batch is used and deleted after the optimization. That is because PPO is on-policy
         obs_batch, act_batch, adv_batch, rtg_batch = buffer.get_batch()
-        # pdb.set_trace()
         old_p_log = None
         if action_type == "Box":
             old_p_log = p_log(act_batch, p_logits(obs_batch),log_std)
@@ -329,7 +336,7 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
 
         lb = len(buffer)
         shuffled_batch = np.arange(lb)    
-        
+        # print("IM here")
         # Policy optimization steps
         for _ in range(actor_iter):
             # shuffle the batch on every iteration
@@ -338,9 +345,9 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
                 minib = shuffled_batch[idx:min(idx+minibatch_size,lb)]
                 old_p_log_ph = old_p_batch[minib]
                 with tf.GradientTape() as tape:
+                    # pdb.set_trace()
                     p_logits_value = p_logits(obs_batch[minib])
                     p_log_value = p_log( act_batch[minib], p_logits_value, log_std)
-                    # pdb.set_trace()
                     p_loss = clipped_surrogate_obj(p_log_value, old_p_batch[minib], adv_batch[minib], eps)
                 
                 gradients = tape.gradient(p_loss,  p_logits.trainable_weights)
@@ -383,6 +390,6 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
 
 
 if __name__ == '__main__':
-    PPO('Walker2DBulletEnv-v0', hidden_sizes=[64,64], cr_lr=5e-4, ac_lr=2e-4, gamma=0.99, lam=0.95, steps_per_env=5000, 
+    PPO('Walker2DBulletEnv-v0', hidden_sizes=[64,64], cr_lr=5e-4, ac_lr=2e-4, gamma=0.99, lam=0.95, steps_per_env=1000, 
         number_envs=1, eps=0.15, actor_iter=6, critic_iter=10, action_type='Box', num_epochs=5000, minibatch_size=256)
       

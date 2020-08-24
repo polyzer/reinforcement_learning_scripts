@@ -119,7 +119,6 @@ def DQN(env_name, hidden_sizes=[32], lr=1e-2, num_epochs=2000,
             g_rew += rew
             step_count += 1
 
-
             if eps > end_explor:
                 eps -= eps_decay
 
