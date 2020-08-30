@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath("./"))
+from envs.TestEnv import TestEnv
 import numpy as np 
 import tensorflow as tf
 import gym
@@ -19,7 +23,6 @@ def mlp(x, hidden_layers, output_size, activation=tf.nn.relu, last_activation=No
     for l in hidden_layers:
         x = tf.keras.layers.Dense(units=l, activation=activation)(x)
     output = tf.keras.layers.Dense(units=output_size, activation=last_activation)(x)
-    # pdb.set_trace()
     return tf.keras.Model(inputs=inputt, outputs=output)
 
 def softmax_entropy(logits):
@@ -33,7 +36,9 @@ def clipped_surrogate_obj(new_p, old_p, adv, eps):
     Clipped surrogate objective function
     '''
     rt = tf.exp(new_p - old_p) # i.e. pi / old_pi
-    return -tf.reduce_mean(tf.minimum(rt*adv, tf.clip_by_value(rt, 1-eps, 1+eps)*adv))
+    ret = -tf.reduce_mean(tf.minimum(rt*adv, tf.clip_by_value(rt, 1-eps, 1+eps)*adv))
+    # pdb.set_trace()
+    return ret
 
 def GAE(rews, v, v_last, gamma=0.99, lam=0.95):
     '''
@@ -78,7 +83,6 @@ class StructEnv(gym.Wrapper):
         self.n_obs = self.env.reset(**kwargs)
         self.rew_episode = 0
         self.len_episode = 0
-        # pdb.set_trace()
         return self.n_obs.copy()
         
     def step(self, action):
@@ -170,7 +174,6 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
 
     def act_smp_cont(p_noisy, low_action_space, high_action_space):
         ret = tf.clip_by_value(p_noisy, low_action_space, high_action_space)
-        # pdb.set_trace()
         return ret
 
     def get_p_noisy(p_logits, log_std):
@@ -186,8 +189,8 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         return ret
 
     # Create some environments to collect the trajectories
-    envs = [StructEnv(gym.make(env_name)) for _ in range(number_envs)]
-    
+    envs = [StructEnv(TestEnv()) for _ in range(number_envs)]
+    pdb.set_trace()
     obs_dim = envs[0].observation_space.shape
 
     # Placeholders
@@ -272,7 +275,8 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         # lists to store rewards and length of the trajectories completed
         batch_rew = []
         batch_len = []
-
+        if ep == 105:
+            pdb.set_trace()
         # Execute in serial the environments, storing temporarily the trajectories. 
         for env in envs:
             temp_buf = []
@@ -283,18 +287,14 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
                 # run the policy
                 nobs = tf.Variable([env.n_obs])
                 nobs = tf.expand_dims(nobs, 0)
-                if type(nobs) != tf.python.framework.ops.EagerTensor:
-                    pdb.set_trace()
                 p_logits_val = p_logits(nobs)
                 p_noisy_val = p_noisy(p_logits_val, log_std)
                 act = act_smp(p_noisy_val, low_action_space, high_action_space)
                 val = s_values(nobs)
                 act = np.squeeze(act)
                 
-                # pdb.set_trace()
                 # take a step in the environment
                 obs2, rew, done, _ = env.step(act)
-                # pdb.set_trace()
                 # add the new transition to the temporary buffer
                 temp_buf.append([env.n_obs.copy(), rew, act, np.squeeze(val)])
 
@@ -342,10 +342,10 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
             # shuffle the batch on every iteration
             np.random.shuffle(shuffled_batch)
             for idx in range(0,lb, minibatch_size):
+                # pdb.set_trace()
                 minib = shuffled_batch[idx:min(idx+minibatch_size,lb)]
                 old_p_log_ph = old_p_batch[minib]
                 with tf.GradientTape() as tape:
-                    # pdb.set_trace()
                     p_logits_value = p_logits(obs_batch[minib])
                     p_log_value = p_log( act_batch[minib], p_logits_value, log_std)
                     p_loss = clipped_surrogate_obj(p_log_value, old_p_batch[minib], adv_batch[minib], eps)
