@@ -21,8 +21,10 @@ def mlp(x, hidden_layers, output_size, activation=tf.nn.relu, last_activation=No
     inputt = tf.keras.Input(shape=(None, x[0]))
     x = inputt
     for l in hidden_layers:
-        x = tf.keras.layers.Dense(units=l, activation=activation)(x)
-    output = tf.keras.layers.Dense(units=output_size, activation=last_activation)(x)
+        x = tf.keras.layers.Dense(units=l, activation=activation,)(x)
+#        x = tf.keras.layers.Dense(units=l, activation=activation, kernel_initializer=tf.keras.initializers.Zeros())(x)
+    # output = tf.keras.layers.Dense(units=output_size, activation=last_activation, kernel_initializer=tf.keras.initializers.Zeros())(x)
+    output = tf.keras.layers.Dense(units=output_size, activation=last_activation,)(x)
     return tf.keras.Model(inputs=inputt, outputs=output)
 
 def softmax_entropy(logits):
@@ -37,7 +39,7 @@ def clipped_surrogate_obj(new_p, old_p, adv, eps):
     '''
     rt = tf.exp(new_p - old_p) # i.e. pi / old_pi
     ret = -tf.reduce_mean(tf.minimum(rt*adv, tf.clip_by_value(rt, 1-eps, 1+eps)*adv))
-    # pdb.set_trace()
+    pdb.set_trace()
     return ret
 
 def GAE(rews, v, v_last, gamma=0.99, lam=0.95):
@@ -189,8 +191,9 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         return ret
 
     # Create some environments to collect the trajectories
-    envs = [StructEnv(TestEnv()) for _ in range(number_envs)]
-    pdb.set_trace()
+    
+    # envs = [StructEnv(TestEnv()) for _ in range(number_envs)]
+    envs = [StructEnv(gym.make(env_name)) for _ in range(number_envs)]
     obs_dim = envs[0].observation_space.shape
 
     # Placeholders
@@ -275,12 +278,10 @@ def PPO(env_name, hidden_sizes=[32], cr_lr=5e-3, ac_lr=5e-3, num_epochs=50, mini
         # lists to store rewards and length of the trajectories completed
         batch_rew = []
         batch_len = []
-        if ep == 105:
-            pdb.set_trace()
         # Execute in serial the environments, storing temporarily the trajectories. 
         for env in envs:
             temp_buf = []
-
+            # pdb.set_trace()
             #iterate over a fixed number of steps
             for k in range(steps_per_env):
                 # print(k)

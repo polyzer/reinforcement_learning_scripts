@@ -6,12 +6,12 @@ from typing import Tuple, Dict, List, Any
 class TestEnv(gym.Env):
   """Custom Environment that follows gym interface"""
 
-  def __init__(self, action_shape=3, observation_shape=[30], sampling_type=0):
+  def __init__(self, action_shape=[3], observation_shape=[30], sampling_type=0):
     super(TestEnv, self).__init__()    # Define action and observation space
     self.action_shape = action_shape
     self.observation_shape = observation_shape
     self.sampling_type = sampling_type
-    self.action_space = spaces.Discrete(action_shape)    # Example for using image as input:
+    self.action_space = spaces.Box(low=0, high=255, shape=action_shape, dtype=np.uint8)    # Example for using image as input:
     self.observation_space = spaces.Box(low=0, high=255, shape=observation_shape, dtype=np.uint8)
 
   def step(self, action):
